@@ -164,8 +164,8 @@ input:invalid {
 
 .reset-send-container {
     display: flex;
-    justify-content: center; /* Centers the button group */
-    gap: 10px; /* Space between the buttons */
+    justify-content: center; 
+    gap: 10px; 
     margin-top: 15px;
 }
 

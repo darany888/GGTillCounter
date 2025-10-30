@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import Currency from '../components/Currency';
 import Denomination from '../components/Denomination';
 import { CurrencyValues, Denom } from '../types';
-// import logo from '../assets/logo.webp'; // Optional import
 
 // --- TYPE DEFINITIONS ---
 type Breakdown = Record<string, number>;
 
 interface BankBreakdownProps {
     actualToBank: number;
-    denoms: Denom[]; // The user's counted cash
+    denoms: Denom[]; 
 }
 // ------------------------
 
@@ -24,7 +23,7 @@ function TillCounter(): JSX.Element {
     new Date().toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }));
     const [varianceReason, setVarianceReason] = useState<string>('');
 
-    // --- MAIN CALCULATIONS (FIXED SCOPE) ---
+    // --- MAIN CALCULATIONS ---
     // Defined once at the top level of the component's render cycle
     const grandTotal = addDenomValues() / 100;
     const actualToBank = grandTotal - floatAmount;
@@ -75,12 +74,11 @@ function TillCounter(): JSX.Element {
         reverse ? setReverse(() => false) : setReverse(() => true);
     }; 
 
-// --- NEW (Handles decimals reliably) ---
+// --- (Handles decimals reliably) ---
 function addDenomValues() {
     if (denoms.length > 0) {
         return denoms.map((denomItem) => {
             const valueString = denomItem.denom.split('-')[1];
-            // CRITICAL: We ensure the string is parsed as a fixed-point number before multiplying
             const denominationValue = parseFloat(valueString) || 0;
             
             // Use Math.round to safely convert to cents and avoid floating point errors
@@ -121,13 +119,11 @@ function addDenomValues() {
         return regexStrings[value] || '';
     }
     
-    // --- GREEDY SELECTION ALGORITHM ---
-// --- NEW (Standardized keys for map matching breakdown logic) ---
+// --- (Standardized keys for map matching breakdown logic) ---
 const getCashMap = (denoms: Denom[]) => {
     return denoms.reduce((acc, item) => {
         const valueString = item.denom.split('-')[1];
         
-        // CRITICAL: Convert the raw string value (e.g., '5' or '0.5') 
         // to a standardized, two-decimal string key (e.g., '5.00' or '0.50')
         const valueKeyFixed = parseFloat(valueString).toFixed(2);
         
@@ -167,7 +163,7 @@ const getCashMap = (denoms: Denom[]) => {
         return breakdown;
     };
 
-// --- GOOGLE SHEET SEND FUNCTION (FORCED ORDER) ---
+// --- GOOGLE SHEET SEND FUNCTION ---
     const handleSendToSheet = async () => {
         // 1. Recalculate totals
         const currentGrandTotal = addDenomValues() / 100;
@@ -182,7 +178,7 @@ const getCashMap = (denoms: Denom[]) => {
         // Sort large to small, which is a common spreadsheet order.
         const orderedDenominations = denominations.values.slice().sort((a, b) => b - a);
         
-        // 4. TRANSFORM BREAKDOWN INTO PAYLOAD FORMAT using the fixed order
+        // 4. TRANSFORM BREAKDOWN INTO PAYLOAD FORMAT
         const orderedDenomData = orderedDenominations.reduce((acc, denomValue) => {
             const valueStr = denomValue.toFixed(2);
             const key = `${valueStr}_count`;
@@ -193,7 +189,7 @@ const getCashMap = (denoms: Denom[]) => {
         }, {} as Record<string, number>);
 
 
-        // 5. CONSTRUCT THE FINAL PAYLOAD (Fixed Keys + Ordered Denom Keys)
+        // 5. CONSTRUCT THE FINAL PAYLOAD
         const payload = {
             Date: today,
             Currency: currency,
@@ -206,7 +202,7 @@ const getCashMap = (denoms: Denom[]) => {
             Discrepancy: currentDiscrepancy.toFixed(2),
             Variance_Reason: varianceReason,
             
-            // ...SPREAD the new, ORDERED bank breakdown data here...
+            // ...SPREAD the ORDERED bank breakdown data here...
             ...orderedDenomData 
         };
         
@@ -231,7 +227,7 @@ const getCashMap = (denoms: Denom[]) => {
         }
     };
 
-    // --- DISPLAY COMPONENTS (Defined inside TillCounter) ---
+    // --- DISPLAY COMPONENTS ---
     const TotalHeader = (): JSX.Element => {
         return (
             <div className="denominations-header">
@@ -377,7 +373,6 @@ const getCashMap = (denoms: Denom[]) => {
                     </span>
                 </p>
 
-                {/* Calling the Breakdown component with the necessary props */}
                 <BankBreakdownOutput
                     actualToBank={actualToBank}
                     denoms={denoms} 
