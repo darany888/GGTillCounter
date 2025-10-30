@@ -354,7 +354,7 @@ const getCashMap = (denoms: Denom[]) => {
                     type="number"
                     value={floatAmount}
                     onChange={(e) => setFloatAmount(parseFloat(e.target.value))}
-                    step="0.01"
+                    step="10"
                 />
             </div>
             
@@ -363,9 +363,9 @@ const getCashMap = (denoms: Denom[]) => {
                     <label>Expected Cash Up: </label>
                     <input
                         type="number"
-                        value={expectedCashUp}
+                        value={expectedCashUp === 0 ? '' : expectedCashUp}
                         onChange={(e) => setExpectedCashUp(parseFloat(e.target.value))}
-                        step="0.01"
+                        step="10"
                     />
                 </div>
             

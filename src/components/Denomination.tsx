@@ -23,7 +23,7 @@ const Denomination = (props: DenominationProps): JSX.Element => {
             <input
                 type="number" 
                 id={id}
-                defaultValue={count > 0 ? count.toString() : '0'}
+                defaultValue={count > 0 ? count.toString() : ''}
                 onChange={onChange}
                 onBlur={onBlur}
                 min="0" 
