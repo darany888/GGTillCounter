@@ -20,7 +20,8 @@ function TillCounter(): JSX.Element {
 
     const [expectedCashUp, setExpectedCashUp] = useState<number>(0);
     const [floatAmount, setFloatAmount] = useState<number>(200);
-    const [today] = useState<string>(new Date().toLocaleDateString());
+    const [today] = useState<string>(
+    new Date().toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }));
     const [varianceReason, setVarianceReason] = useState<string>('');
 
     // --- MAIN CALCULATIONS (FIXED SCOPE) ---
