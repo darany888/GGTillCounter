@@ -219,7 +219,7 @@ const getCashMap = (denoms: Denom[]) => {
             });
             
             console.log('Bank data transfer initiated (check Google Sheet)!');
-            alert('Till data sent successfully!');
+            alert('Till data sent successfully! Thanks!!!!');
 
         } catch (error) {
             console.error('Error sending data to Google Sheet:', error);
@@ -356,7 +356,7 @@ const getCashMap = (denoms: Denom[]) => {
             
             <div className="cashup">
                 <div className="cashup-row">
-                    <label>Expected Cash Up: </label>
+                    <label>Expected Cash: </label>
                     <input
                         type="number"
                         value={expectedCashUp === 0 ? '' : expectedCashUp}
@@ -387,14 +387,23 @@ const getCashMap = (denoms: Denom[]) => {
             </div>
             
             <div className="variance-reason">
-                <label>Reason for Variance:</label>
+                <label>
+                    {/* CHECK IF DISCREPANCY IS ZERO */}
+                    <b>
+                        {discrepancy === 0 
+                            ? 'Good Job! Feel free to leave any notes or press send.' 
+                            : 'Reason for Variance:'}
+                    </b>
+                </label>
                 <textarea
                     value={varianceReason}
                     onChange={(e) => setVarianceReason(e.target.value)}
                     rows={3} 
                     className="reason-input"
-                    placeholder="Please give reasons for variances"
-                />
+                    placeholder={discrepancy === 0 
+                    ? 'Any comments?' 
+                    : 'Please give reasons for variances'}
+              />
             </div>
             
             <ResetAndSend />
