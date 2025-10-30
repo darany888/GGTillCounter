@@ -2,12 +2,20 @@ import React, { useState } from 'react';
 import Currency from '../components/Currency';
 import Denomination from '../components/Denomination';
 import { CurrencyValues, Denom } from '../types';
-import logo from '../assets/logo.webp';
+// import logo from '../assets/logo.webp'; // Optional import
 
-type Breakdown = Record<string, number>
+// --- TYPE DEFINITIONS ---
+type Breakdown = Record<string, number>;
+
+interface BankBreakdownProps {
+    actualToBank: number;
+    denoms: Denom[]; // The user's counted cash
+}
+// ------------------------
+
 function TillCounter(): JSX.Element {
     const [denoms, setDenoms] = useState<Denom[]>([]);
-    const [currency, setCurrency] = useState('NZD');
+    const [currency] = useState('NZD'); // Using NZD as default currency
     const [reverse, setReverse] = useState(true);
 
     const [expectedCashUp, setExpectedCashUp] = useState<number>(0);
@@ -15,7 +23,8 @@ function TillCounter(): JSX.Element {
     const [today] = useState<string>(new Date().toLocaleDateString());
     const [varianceReason, setVarianceReason] = useState<string>('');
 
-    // Calculations must be done inside the function or just before render/send
+    // --- MAIN CALCULATIONS (FIXED SCOPE) ---
+    // Defined once at the top level of the component's render cycle
     const grandTotal = addDenomValues() / 100;
     const actualToBank = grandTotal - floatAmount;
     const discrepancy = grandTotal - expectedCashUp - floatAmount;
@@ -47,7 +56,6 @@ function TillCounter(): JSX.Element {
     };
 
     const handleReset = () => {
-        // Corrected for TypeScript error (TS2339) and to reset textarea
         Array.from(document.querySelectorAll('input, textarea')).forEach(
             (element) => {
                 const input = element as HTMLInputElement | HTMLTextAreaElement;
@@ -57,8 +65,8 @@ function TillCounter(): JSX.Element {
         setDenoms(() => []);
         setReverse(() => true);
         setVarianceReason(() => '');
-        setExpectedCashUp(0); // Resetting custom inputs
-        setFloatAmount(200); // Resetting custom inputs (or desired default)
+        setExpectedCashUp(0);
+        setFloatAmount(200);
         addDenomValues();
     };
 
@@ -66,23 +74,29 @@ function TillCounter(): JSX.Element {
         reverse ? setReverse(() => false) : setReverse(() => true);
     }; 
 
-    function addDenomValues() {
-        if (denoms.length > 0) {
-            return denoms.map((denomItem) => {
-                const valueString = denomItem.denom.split('-')[1];
-                const denominationValue = parseFloat(valueString) || 0;
-                return denomItem.value * denominationValue * 100;
-            }).reduce((a, b) => a + b, 0); 
-        }
-        return 0;
+// --- NEW (Handles decimals reliably) ---
+function addDenomValues() {
+    if (denoms.length > 0) {
+        return denoms.map((denomItem) => {
+            const valueString = denomItem.denom.split('-')[1];
+            // CRITICAL: We ensure the string is parsed as a fixed-point number before multiplying
+            const denominationValue = parseFloat(valueString) || 0;
+            
+            // Use Math.round to safely convert to cents and avoid floating point errors
+            const valueInCents = Math.round(denominationValue * 100);
+            
+            return denomItem.value * valueInCents;
+        }).reduce((a, b) => a + b, 0); 
     }
+    return 0;
+}
 
     function fillCurrency(currency: string): CurrencyValues {
         const currencies: Array<CurrencyValues> = [
             { code: 'AUD', symbol: '$', values: [100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05] },
             { code: 'EUR', symbol: '€', values: [500, 200, 100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01] },
             { code: 'JPY', symbol: '¥', values: [10000, 5000, 2000, 1000, 500, 100, 50, 10, 5, 1] },
-            { code: 'NZD', symbol: '$', values: [100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05] },
+            { code: 'NZD', symbol: '$', values: [100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1] },
             { code: 'USD', symbol: '$', values: [100, 50, 20, 10, 5, 2, 1, 0.5, 0.25, 0.1, 0.05, 0.01] }
         ];
 
@@ -106,73 +120,148 @@ function TillCounter(): JSX.Element {
         return regexStrings[value] || '';
     }
     
-// ⭐ NEW: GREEDY ALGORITHM FUNCTION ⭐
-    const getBankBreakdown = (amount: number): Breakdown => {
-        let remaining = Math.round(amount * 100); // Work with cents to avoid floating point issues
-        const breakdown: Breakdown = {};
+    // --- GREEDY SELECTION ALGORITHM ---
+// --- NEW (Standardized keys for map matching breakdown logic) ---
+const getCashMap = (denoms: Denom[]) => {
+    return denoms.reduce((acc, item) => {
+        const valueString = item.denom.split('-')[1];
         
-        // Get sorted list of denomination values (largest to smallest)
+        // CRITICAL: Convert the raw string value (e.g., '5' or '0.5') 
+        // to a standardized, two-decimal string key (e.g., '5.00' or '0.50')
+        const valueKeyFixed = parseFloat(valueString).toFixed(2);
+        
+        acc[valueKeyFixed] = item.value;
+        return acc;
+    }, {} as Record<string, number>);
+};
+
+    const getBankBreakdown = (amount: number, denoms: Denom[]): Breakdown => {
+        let targetInCents = Math.round(amount * 100);
+        const breakdown: Breakdown = {};
+        const availableCash = getCashMap(denoms); 
+        
         const denominations = fillCurrency(currency).values.slice().sort((a, b) => b - a);
 
         for (const denomValue of denominations) {
+            const valueKey = denomValue.toFixed(2);
             const valueInCents = Math.round(denomValue * 100);
             
-            if (remaining >= valueInCents) {
-                const count = Math.floor(remaining / valueInCents);
-                // Store the count with the original dollar value as the key
-                breakdown[denomValue.toFixed(2)] = count; 
-                remaining -= count * valueInCents;
+            const availableCount = availableCash[valueKey] || 0;
+            const neededCount = Math.floor(targetInCents / valueInCents);
+
+            const bankCount = Math.min(neededCount, availableCount);
+
+            if (bankCount > 0) {
+                breakdown[valueKey] = bankCount; 
+                targetInCents -= bankCount * valueInCents;
+                
+                if (targetInCents <= 0) break;
             }
         }
+        
+        if (targetInCents > 0) {
+            console.warn(`Breakdown missed $${(targetInCents / 100).toFixed(2)} due to denomination shortage.`);
+        }
+
         return breakdown;
     };
 
-    // ⭐ GOOGLE SHEET SEND FUNCTION ⭐
+// --- GOOGLE SHEET SEND FUNCTION (FORCED ORDER) ---
     const handleSendToSheet = async () => {
+        // 1. Recalculate totals
         const currentGrandTotal = addDenomValues() / 100;
         const currentActualToBank = currentGrandTotal - floatAmount;
         const currentDiscrepancy = currentGrandTotal - expectedCashUp - floatAmount;
 
-        // Prepare Denomination Data (Keys MUST match Google Sheet headers exactly!)
-        const denomData = denoms.reduce((acc, item) => {
-            const denomValue = parseFloat(item.denom.split('-')[1]);
-            // IMPORTANT: Keys use DOTs (100.00_count) to match the Apps Script headers
-            acc[`${denomValue.toFixed(2)}_count`] = item.value; 
+        // 2. GET THE BANKING BREAKDOWN
+        const bankBreakdown = getBankBreakdown(currentActualToBank, denoms); 
+
+        // 3. DEFINE FIXED ORDER FOR DENOMINATION HEADERS
+        const denominations = fillCurrency(currency); // Get the standard currency list
+        // Sort large to small, which is a common spreadsheet order.
+        const orderedDenominations = denominations.values.slice().sort((a, b) => b - a);
+        
+        // 4. TRANSFORM BREAKDOWN INTO PAYLOAD FORMAT using the fixed order
+        const orderedDenomData = orderedDenominations.reduce((acc, denomValue) => {
+            const valueStr = denomValue.toFixed(2);
+            const key = `${valueStr}_count`;
+            
+            // Use the banked count, or 0 if that denomination was not banked
+            acc[key] = bankBreakdown[valueStr] || 0; 
             return acc;
         }, {} as Record<string, number>);
 
+
+        // 5. CONSTRUCT THE FINAL PAYLOAD (Fixed Keys + Ordered Denom Keys)
         const payload = {
             Date: today,
             Currency: currency,
+            
+            // Financial totals (Order is fixed here)
             Grand_Total: currentGrandTotal.toFixed(2),
             Expected_Cash_Up: expectedCashUp.toFixed(2),
             Float_Amount: floatAmount.toFixed(2),
             Actual_To_Bank: currentActualToBank.toFixed(2),
             Discrepancy: currentDiscrepancy.toFixed(2),
             Variance_Reason: varianceReason,
-            ...denomData 
+            
+            // ...SPREAD the new, ORDERED bank breakdown data here...
+            ...orderedDenomData 
         };
         
-        console.log("Sending Payload:", payload);
+        console.log("Sending ORDERED Banking Payload:", payload);
 
-        //  PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE 
         const GOOGLE_SHEET_ENDPOINT = "https://script.google.com/macros/s/AKfycbzASroH-9PKUEfhptUs5LboDa7FbdR9nZ5yi7EuqhB-uWUqlchzKjfelYhNiLkgFEUM/exec"; 
 
         try {
-            const response = await fetch(GOOGLE_SHEET_ENDPOINT, {
+            await fetch(GOOGLE_SHEET_ENDPOINT, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
             
-            console.log('Data transfer initiated (check Google Sheet)!');
+            console.log('Bank data transfer initiated (check Google Sheet)!');
             alert('Till data sent successfully!');
 
         } catch (error) {
             console.error('Error sending data to Google Sheet:', error);
             alert('Error sending data. Check console.');
         }
+    };
+
+    // --- DISPLAY COMPONENTS (Defined inside TillCounter) ---
+    const TotalHeader = (): JSX.Element => {
+        return (
+            <div className="denominations-header">
+                <span className="header-denom">Coins/Notes</span>
+                <span className="header-count">Till</span>
+                <span className="header-total">Total</span>
+            </div>
+        )
+    }
+
+    const Total = (): JSX.Element => {
+        return (
+            <div className="total">
+                <p>
+                    <b>Total: </b>
+                    <span className="total-span">
+                        {denominations.symbol}
+                        {(grandTotal).toFixed(2)}
+                    </span>
+                </p>
+            </div>
+        );
+    };
+
+    const ReverseCheck = (): JSX.Element => {
+        return (
+            <div className="reverse">
+                <label>Reverse: </label>
+                <input type="checkbox" checked={reverse} onChange={handleReverse} />
+            </div>
+        );
     };
 
     const ResetAndSend = (): JSX.Element => {
@@ -187,9 +276,43 @@ function TillCounter(): JSX.Element {
             </div>
         );
     };
-    
-    // --- OUTPUT RENDERING ---
-    
+
+    const BankBreakdownOutput = ({ actualToBank, denoms }: BankBreakdownProps): JSX.Element => {
+        const breakdown = getBankBreakdown(actualToBank, denoms); 
+        const symbol = fillCurrency(currency).symbol;
+
+        const sortedDenoms = Object.keys(breakdown).sort((a, b) => parseFloat(b) - parseFloat(a));
+
+        if (actualToBank <= 0) {
+            return (
+                <div className="bank-breakdown">
+                    <p className="breakdown-header">
+                        <b>Bank Deposit Breakdown:</b>
+                    </p>
+                    <p className="breakdown-item">No cash to bank.</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="bank-breakdown">
+                <p className="breakdown-header">
+                    <b>Bank Deposit Breakdown:</b>
+                </p>
+                <div className="breakdown-list">
+                    {sortedDenoms.map((valueStr) => (
+                        <p key={valueStr} className="breakdown-item">
+                            {breakdown[valueStr]} x {symbol}{valueStr}
+                        </p>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+
+    // --- FINAL RENDER SETUP ---
+
     const denominations = fillCurrency(currency);
     const outputs: JSX.Element[] = [];
     
@@ -213,102 +336,9 @@ function TillCounter(): JSX.Element {
             />
         );
     });
-    
-    // --- DISPLAY COMPONENTS ---
-    
-    const TotalHeader = (): JSX.Element => {
-        return (
-            <div className="denominations-header">
-                <span className="header-denom">Coins/Notes</span>
-                <span className="header-count">Till</span>
-                <span className="header-total">Total</span>
-            </div>
-        )
-    }
-
-// Component to display the bank deposit breakdown
-    const BankBreakdownOutput = (): JSX.Element => {
-        // Calculate the breakdown using the Actual Banking amount
-        const breakdown = getBankBreakdown(actualToBank);
-        const symbol = fillCurrency(currency).symbol;
-
-        // Get the denomination values from largest to smallest for display order
-        const sortedDenoms = Object.keys(breakdown).sort((a, b) => parseFloat(b) - parseFloat(a));
-
-        if (actualToBank <= 0) {
-             return (
-                 <div className="bank-breakdown">
-                     <p className="breakdown-header">
-                         <b>Bank Deposit Breakdown:</b>
-                     </p>
-                     <p className="breakdown-item">No cash to bank.</p>
-                 </div>
-             );
-         }
-
-
-        return (
-            <div className="bank-breakdown">
-                <p className="breakdown-header">
-                    <b>Bank Deposit Breakdown:</b>
-                </p>
-                <div className="breakdown-list">
-                    {sortedDenoms.map((valueStr) => (
-                        <p key={valueStr} className="breakdown-item">
-                            {breakdown[valueStr]} x {symbol}{valueStr}
-                        </p>
-                    ))}
-                </div>
-            </div>
-        );
-    };
-
-    const Reset = (): JSX.Element => {
-        return (
-            <div className="reset-send-container">
-                <button onClick={handleSendToSheet} className="send-button">
-                    Send to Google Sheet
-                </button>
-                <button onClick={handleReset} className="reset-button">
-                    Reset
-                </button>
-            </div>
-        );
-    };
-
-    const ReverseCheck = (): JSX.Element => {
-        return (
-            <div className="reverse">
-                <label>Reverse: </label>
-                <input type="checkbox" checked={reverse} onChange={handleReverse} />
-            </div>
-        );
-    };
-
-    const Total = (): JSX.Element => {
-        return (
-            <div className="total">
-                <p>
-                    <b>Total: </b>
-                    <span className="total-span">
-                        {denominations.symbol}
-                        {(addDenomValues() / 100).toFixed(2)}
-                    </span>
-                </p>
-            </div>
-        );
-    };
-    
-    // --- FINAL RENDER ---
-
-    const currentGrandTotal = addDenomValues() / 100;
-    const currentActualToBank = currentGrandTotal - floatAmount;
-    const currentDiscrepancy = currentGrandTotal - expectedCashUp - floatAmount;
-
 
     return (
         <div className="tillcounter">
-            {/*<img src={logo} alt="Glou Glou Cashup Logo" className="logo" /> */}
             <ReverseCheck />
             <p><b>Today&apos;s Date:</b> {today}</p>
 
@@ -317,7 +347,6 @@ function TillCounter(): JSX.Element {
             <hr />
             <Total />
             
-            {/* Float Amount moved out of cashup div to match your structure */}
             <div className="cashup-row">
                 <label>Float Amount: </label>
                 <input
@@ -343,15 +372,20 @@ function TillCounter(): JSX.Element {
                     <b>Actual Banking: </b>
                     <span className="total-span">
                         {denominations.symbol}
-                        {currentActualToBank.toFixed(2)}
+                        {actualToBank.toFixed(2)}
                     </span>
                 </p>
-                {/* ⭐ NEW OUTPUT LOCATION ⭐ */}
-                <BankBreakdownOutput />
+
+                {/* Calling the Breakdown component with the necessary props */}
+                <BankBreakdownOutput
+                    actualToBank={actualToBank}
+                    denoms={denoms} 
+                />
+                
                 <p>
                     <b>Discrepancy: </b>
-                    <span style={{ color: currentDiscrepancy === 0 ? 'green' : 'red' }}>
-                        {denominations.symbol}{currentDiscrepancy.toFixed(2)}
+                    <span style={{ color: discrepancy === 0 ? 'green' : 'red' }}>
+                        {denominations.symbol}{discrepancy.toFixed(2)}
                     </span>
                 </p>
             </div>
