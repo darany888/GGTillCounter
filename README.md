@@ -1,8 +1,31 @@
 # Till Counter
 
-A basic React app that lets you count money!
+Thanks to the original creator of the app https://morgandival.github.io/till-counter/
 
-**Link to project:** https://morgandival.github.io/till-counter/
+The link for this project: https://darany888.github.io/GGTillCounter/
+
+We have recently moved from a POS that allows end of day cash up to one that have no cash coin functionality. One of the staff found this app useful so I have tweaked to fit the needs for a Cafe.
+
+The app records the date and set the default float amount to $200 which can be changed. 
+The user in charge of end of day count, can count each denominator separately which will tally up the total for each row and the final amount at the bottom. After subtracting the float amount, the Actual amount can be compared to what's expected, in our case it is the end of day receipts produced by the POS.This will give us a variance which allow a user to enter a reason for.
+
+It will also give the final deposit breakdown based on the available denominator.
+And finally, after all has been completed, there is an appscript that links to a Google Sheet which record all the values.
+
+I kept the dimension small and remove all default zeros, so that this can easily be done on a cell phone quickly.
+
+## Upgrades:
+
+- [x] Add today's date
+- [x] Default Reverse order
+- [x] Default to NZD
+- [x] Add Float Amount (Default to $200)
+- [x] Add Expected Cash up that users can enter from the end of day receipts
+- [x] Calculate Bank Deposit breakdown for the cash minus the float amount.
+- [x] Add a text box for reason for variance.
+- [x] Add ability to send to Google Sheet which allows for tracking.
+
+Most of the readme below came from the original creator. Kudos to him for this. 
 
 ## How It's Made:
 
@@ -16,17 +39,6 @@ React states keep track of the values entered, display a count of each denominat
 
 Each currency option dynamically generates the relevant denominations and displays the symbols of that currency.
 
-## Upgrades:
-
-- [x] Denomination counts based on amounts entered!
-- [x] Separation of denomination fields into their own child components!
-- [x] Better handling and display of invalid values!
-- [x] Alternative currencies!!! (AUD, EUR, JPY, NZD, USD)
-- [x] Alternative currencies 2.0: change the symbol for currencies that don't use dollars!
-- [x] Reset button: click to reset to 0.00 so you can start again without refreshing!
-- [x] Reset on currency change!
-- [x] Ability to toggle sorting of currency order!
-- [x] Pull types out into own type definition file!
 
 ## Known Issues:
 
