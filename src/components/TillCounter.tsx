@@ -4,6 +4,7 @@ import Denomination from '../components/Denomination';
 import { CurrencyValues, Denom } from '../types';
 import logo from '../assets/logo.webp';
 
+type Breakdown = Record<string, number>
 function TillCounter(): JSX.Element {
     const [denoms, setDenoms] = useState<Denom[]>([]);
     const [currency, setCurrency] = useState('NZD');
@@ -104,6 +105,27 @@ function TillCounter(): JSX.Element {
         };
         return regexStrings[value] || '';
     }
+    
+// ⭐ NEW: GREEDY ALGORITHM FUNCTION ⭐
+    const getBankBreakdown = (amount: number): Breakdown => {
+        let remaining = Math.round(amount * 100); // Work with cents to avoid floating point issues
+        const breakdown: Breakdown = {};
+        
+        // Get sorted list of denomination values (largest to smallest)
+        const denominations = fillCurrency(currency).values.slice().sort((a, b) => b - a);
+
+        for (const denomValue of denominations) {
+            const valueInCents = Math.round(denomValue * 100);
+            
+            if (remaining >= valueInCents) {
+                const count = Math.floor(remaining / valueInCents);
+                // Store the count with the original dollar value as the key
+                breakdown[denomValue.toFixed(2)] = count; 
+                remaining -= count * valueInCents;
+            }
+        }
+        return breakdown;
+    };
 
     // ⭐ GOOGLE SHEET SEND FUNCTION ⭐
     const handleSendToSheet = async () => {
@@ -133,7 +155,7 @@ function TillCounter(): JSX.Element {
         
         console.log("Sending Payload:", payload);
 
-        // ⭐ PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE ⭐
+        //  PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE 
         const GOOGLE_SHEET_ENDPOINT = "https://script.google.com/macros/s/AKfycbzASroH-9PKUEfhptUs5LboDa7FbdR9nZ5yi7EuqhB-uWUqlchzKjfelYhNiLkgFEUM/exec"; 
 
         try {
@@ -203,6 +225,56 @@ function TillCounter(): JSX.Element {
             </div>
         )
     }
+
+// Component to display the bank deposit breakdown
+    const BankBreakdownOutput = (): JSX.Element => {
+        // Calculate the breakdown using the Actual Banking amount
+        const breakdown = getBankBreakdown(actualToBank);
+        const symbol = fillCurrency(currency).symbol;
+
+        // Get the denomination values from largest to smallest for display order
+        const sortedDenoms = Object.keys(breakdown).sort((a, b) => parseFloat(b) - parseFloat(a));
+
+        if (actualToBank <= 0) {
+             return (
+                 <div className="bank-breakdown">
+                     <p className="breakdown-header">
+                         <b>Bank Deposit Breakdown:</b>
+                     </p>
+                     <p className="breakdown-item">No cash to bank.</p>
+                 </div>
+             );
+         }
+
+
+        return (
+            <div className="bank-breakdown">
+                <p className="breakdown-header">
+                    <b>Bank Deposit Breakdown:</b>
+                </p>
+                <div className="breakdown-list">
+                    {sortedDenoms.map((valueStr) => (
+                        <p key={valueStr} className="breakdown-item">
+                            {breakdown[valueStr]} x {symbol}{valueStr}
+                        </p>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+    const Reset = (): JSX.Element => {
+        return (
+            <div className="reset-send-container">
+                <button onClick={handleSendToSheet} className="send-button">
+                    Send to Google Sheet
+                </button>
+                <button onClick={handleReset} className="reset-button">
+                    Reset
+                </button>
+            </div>
+        );
+    };
 
     const ReverseCheck = (): JSX.Element => {
         return (
@@ -274,7 +346,8 @@ function TillCounter(): JSX.Element {
                         {currentActualToBank.toFixed(2)}
                     </span>
                 </p>
-                
+                {/* ⭐ NEW OUTPUT LOCATION ⭐ */}
+                <BankBreakdownOutput />
                 <p>
                     <b>Discrepancy: </b>
                     <span style={{ color: currentDiscrepancy === 0 ? 'green' : 'red' }}>
