@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import Header from './Header';
 
 test('Render header element', () => {
-  const props = { title: 'Till Counter' };
+  const props = { title: 'Glou Glou Cashup' };
   render(<Header title={props.title} />);
 
-  expect(screen.getByText('Till Counter')).toBeTruthy;
+  expect(screen.getByText('Glou Glou Cashup')).toBeTruthy;
 });

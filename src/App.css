@@ -1,11 +1,13 @@
+/* In app.css */
 .App {
-  border: 1px solid #000000;
-  border-radius: 1em;
-  margin: 1em auto 1em auto;
-  padding: 1em;
-  width: 20em;
+    border: 1px solid #000000;
+    border-radius: 1em;
+    margin: 1em auto 1em auto;
+    padding: 1em;
+    /* Setting a fixed, slightly wider width */
+    width: 400px; 
 }
 
 hr {
-  margin: 1em;
+    margin: 1em;
 }

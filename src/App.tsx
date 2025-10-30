@@ -6,7 +6,7 @@ import TillCounter from './components/TillCounter';
 function App(): JSX.Element {
   return (
     <div id="App" className="App">
-      <Header title="Till Counter" />
+      <Header title="Glou Glou Cashup" />
       <TillCounter />
     </div>
   );
