@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.css": "/GGTillCounter/static/css/main.59ff68bc.css",
+    "main.js": "/GGTillCounter/static/js/main.d6f4a654.js",
+    "static/media/logo.webp": "/GGTillCounter/static/media/logo.da660520ac64da6092d9.webp",
+    "index.html": "/GGTillCounter/index.html",
+    "main.59ff68bc.css.map": "/GGTillCounter/static/css/main.59ff68bc.css.map",
+    "main.d6f4a654.js.map": "/GGTillCounter/static/js/main.d6f4a654.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.59ff68bc.css",
+    "static/js/main.d6f4a654.js"
+  ]
+}
