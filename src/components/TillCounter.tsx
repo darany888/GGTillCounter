@@ -15,13 +15,17 @@ interface BankBreakdownProps {
 function TillCounter(): JSX.Element {
     const [denoms, setDenoms] = useState<Denom[]>([]);
     const [currency] = useState('NZD'); // Using NZD as default currency
-    const [reverse, setReverse] = useState(true);
+    const [reverse, setReverse] = useState(false);
 
     const [expectedCashUp, setExpectedCashUp] = useState<number>(0);
     const [floatAmount, setFloatAmount] = useState<number>(200);
     const [today] = useState<string>(
     new Date().toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }));
     const [varianceReason, setVarianceReason] = useState<string>('');
+
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitMessage, setSubmitMessage] = useState('');
+    const [isSuccess, setIsSuccess] = useState(false); // New state to track success
 
     // --- MAIN CALCULATIONS ---
     // Defined once at the top level of the component's render cycle
@@ -63,7 +67,7 @@ function TillCounter(): JSX.Element {
             }
         );
         setDenoms(() => []);
-        setReverse(() => true);
+        setReverse(() => false);
         setVarianceReason(() => '');
         setExpectedCashUp(0);
         setFloatAmount(200);
@@ -164,66 +168,68 @@ const getCashMap = (denoms: Denom[]) => {
     };
 
 // --- GOOGLE SHEET SEND FUNCTION ---
-    const handleSendToSheet = async () => {
-        // 1. Recalculate totals
-        const currentGrandTotal = addDenomValues() / 100;
-        const currentActualToBank = currentGrandTotal - floatAmount;
-        const currentDiscrepancy = currentGrandTotal - expectedCashUp - floatAmount;
+const handleSendToSheet = async () => {
+    // --- STEP 1: START SUBMISSION & DISABLE BUTTON ---
+    setIsSubmitting(true);
+    setSubmitMessage('Sending data... please wait...'); 
 
-        // 2. GET THE BANKING BREAKDOWN
-        const bankBreakdown = getBankBreakdown(currentActualToBank, denoms); 
+    // 2. GET THE BANKING BREAKDOWN (existing logic remains)
+    const currentGrandTotal = addDenomValues() / 100;
+    const currentActualToBank = currentGrandTotal - floatAmount;
+    const currentDiscrepancy = currentGrandTotal - expectedCashUp - floatAmount;
+    const bankBreakdown = getBankBreakdown(currentActualToBank, denoms); 
+    const denominations = fillCurrency(currency); 
+    const orderedDenominations = denominations.values.slice().sort((a, b) => b - a);
+    const orderedDenomData = orderedDenominations.reduce((acc, denomValue) => {
+        const valueStr = denomValue.toFixed(2);
+        const key = `${valueStr}_count`;
+        acc[key] = bankBreakdown[valueStr] || 0; 
+        return acc;
+    }, {} as Record<string, number>);
 
-        // 3. DEFINE FIXED ORDER FOR DENOMINATION HEADERS
-        const denominations = fillCurrency(currency); // Get the standard currency list
-        // Sort large to small, which is a common spreadsheet order.
-        const orderedDenominations = denominations.values.slice().sort((a, b) => b - a);
-        
-        // 4. TRANSFORM BREAKDOWN INTO PAYLOAD FORMAT
-        const orderedDenomData = orderedDenominations.reduce((acc, denomValue) => {
-            const valueStr = denomValue.toFixed(2);
-            const key = `${valueStr}_count`;
-            
-            // Use the banked count, or 0 if that denomination was not banked
-            acc[key] = bankBreakdown[valueStr] || 0; 
-            return acc;
-        }, {} as Record<string, number>);
+    // 5. CONSTRUCT THE FINAL PAYLOAD (existing logic remains)
+    const payload = {
+        Date: today,
+        Currency: currency,
+        Grand_Total: currentGrandTotal.toFixed(2),
+        Expected_Cash_Up: expectedCashUp.toFixed(2),
+        Float_Amount: floatAmount.toFixed(2),
+        Actual_To_Bank: currentActualToBank.toFixed(2),
+        Discrepancy: currentDiscrepancy.toFixed(2),
+        Variance_Reason: varianceReason,
+        ...orderedDenomData 
+    };
+    
+    console.log("Sending ORDERED Banking Payload:", payload);
 
+    const GOOGLE_SHEET_ENDPOINT = "https://script.google.com/macros/s/AKfycbzASroH-9PKUEfhptUs5LboDa7FbdR9nZ5yi7EuqhB-uWUqlchzKjfelYhNiLkgFEUM/exec"; 
 
-        // 5. CONSTRUCT THE FINAL PAYLOAD
-        const payload = {
-            Date: today,
-            Currency: currency,
-            
-            // Financial totals (Order is fixed here)
-            Grand_Total: currentGrandTotal.toFixed(2),
-            Expected_Cash_Up: expectedCashUp.toFixed(2),
-            Float_Amount: floatAmount.toFixed(2),
-            Actual_To_Bank: currentActualToBank.toFixed(2),
-            Discrepancy: currentDiscrepancy.toFixed(2),
-            Variance_Reason: varianceReason,
-            
-            // ...SPREAD the ORDERED bank breakdown data here...
-            ...orderedDenomData 
-        };
-        
-        console.log("Sending ORDERED Banking Payload:", payload);
-
-        const GOOGLE_SHEET_ENDPOINT = "https://script.google.com/macros/s/AKfycbzASroH-9PKUEfhptUs5LboDa7FbdR9nZ5yi7EuqhB-uWUqlchzKjfelYhNiLkgFEUM/exec"; 
-
-        try {
-            await fetch(GOOGLE_SHEET_ENDPOINT, {
+    try {
+            const response = await fetch(GOOGLE_SHEET_ENDPOINT, {
                 method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
+                // mode: 'no-cors' REMOVED
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload),
             });
             
-            console.log('Bank data transfer initiated (check Google Sheet)!');
-            alert('Till data sent successfully! Thanks!!!!');
+            if (response.ok) {
+                console.log('Bank data transfer successful!');
+                setIsSuccess(true); // Set success state
+                // Immediately reset the form after successful submission
+                handleReset(); 
+            } else {
+                console.error('Script returned non-successful response.');
+                // Optional: You could still show an alert for a non-fatal error
+                alert('❌ Error: Script responded but may have failed.');
+            }
 
         } catch (error) {
             console.error('Error sending data to Google Sheet:', error);
-            alert('Error sending data. Check console.');
+            alert('❌ Network Error sending data. Check console.');
+        } finally {
+            // --- KEY CHANGE: Always set isSubmitting back to false ---
+            // This is crucial to stop the button from being "stuck"
+            setIsSubmitting(false); 
         }
     };
 
@@ -262,50 +268,73 @@ const getCashMap = (denoms: Denom[]) => {
     };
 
     const ResetAndSend = (): JSX.Element => {
-        return (
-            <div className="reset-send-container">
-                <button onClick={handleSendToSheet} className="send-button">
-                    Send to Google Sheet
-                </button>
-                <button onClick={handleReset} className="reset-button">
-                    Reset
-                </button>
-            </div>
-        );
-    };
+    
+    let buttonText = 'Send to Google Sheet';
+    
+    if (isSubmitting) {
+        buttonText = 'Sending...';
+    } else if (isSuccess) {
+        // Button shows this briefly, then resets if handleReset() is called
+        buttonText = 'Sent!'; 
+    }
 
-    const BankBreakdownOutput = ({ actualToBank, denoms }: BankBreakdownProps): JSX.Element => {
-        const breakdown = getBankBreakdown(actualToBank, denoms); 
-        const symbol = fillCurrency(currency).symbol;
+    return (
+        <div className="reset-send-container">
+            <button 
+                onClick={handleSendToSheet} 
+                className={`send-button ${isSuccess ? 'success' : ''}`} // Optional class for green background
+                // The button is only disabled while actively submitting
+                disabled={isSubmitting} 
+            >
+                {buttonText}
+            </button>
+            <button onClick={handleReset} className="reset-button">
+                Reset
+            </button>
+            
+            {/* --- REMOVE THIS BLOCK to hide the text on the side ---
+            {submitMessage && (
+                <p ...>
+                    {submitMessage}
+                </p>
+            )}
+            */}
+        </div>
+    );
+};
 
-        const sortedDenoms = Object.keys(breakdown).sort((a, b) => parseFloat(b) - parseFloat(a));
+        const BankBreakdownOutput = ({ actualToBank, denoms }: BankBreakdownProps): JSX.Element => {
+            const breakdown = getBankBreakdown(actualToBank, denoms); 
+            const symbol = fillCurrency(currency).symbol;
 
-        if (actualToBank <= 0) {
+            const sortedDenoms = Object.keys(breakdown).sort((a, b) => parseFloat(b) - parseFloat(a));
+
+            if (actualToBank <= 0) {
+                return (
+                    <div className="bank-breakdown">
+                        <p className="breakdown-header">
+                            <b>Bank Deposit Breakdown:</b>
+                        </p>
+                        <p className="breakdown-item">No cash to bank.</p>
+                    </div>
+                );
+            }
+
             return (
                 <div className="bank-breakdown">
                     <p className="breakdown-header">
                         <b>Bank Deposit Breakdown:</b>
                     </p>
-                    <p className="breakdown-item">No cash to bank.</p>
+                    <div className="breakdown-list">
+                        {sortedDenoms.map((valueStr) => (
+                            <p key={valueStr} className="breakdown-item">
+                                {breakdown[valueStr]} x {symbol}{valueStr}
+                            </p>
+                        ))}
+                    </div>
                 </div>
             );
-        }
-
-        return (
-            <div className="bank-breakdown">
-                <p className="breakdown-header">
-                    <b>Bank Deposit Breakdown:</b>
-                </p>
-                <div className="breakdown-list">
-                    {sortedDenoms.map((valueStr) => (
-                        <p key={valueStr} className="breakdown-item">
-                            {breakdown[valueStr]} x {symbol}{valueStr}
-                        </p>
-                    ))}
-                </div>
-            </div>
-        );
-    };
+        };
 
 
     // --- FINAL RENDER SETUP ---
